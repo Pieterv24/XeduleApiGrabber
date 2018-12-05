@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace AiXeduleApiGrabber.Models
 {
-    public class DocentEntry
+    public class DocentEntry : ISubjectEntry
     {
         public string[] AttTls { get; set; }
         public string[] AttGls { get; set; }

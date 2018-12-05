@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace AiXeduleApiGrabber.Models
 {
-    public class GroupEntry
+    public class GroupEntry : ISubjectEntry
     {
         public string Id { get; set; }
         public string Code { get; set; }

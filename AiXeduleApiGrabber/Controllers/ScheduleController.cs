@@ -84,10 +84,10 @@ namespace AiXeduleApiGrabber.Controllers
             return NotFound();
         }
         */
-        public async Task<IActionResult> GetIcalSchedule([FromQuery] string group)
+        public async Task<IActionResult> GetIcalSchedule([FromQuery] string group, [FromQuery] string docent)
         {
             int weekNr = 200;
-            if (!string.IsNullOrWhiteSpace(group))
+            if (!string.IsNullOrWhiteSpace(group) || !string.IsNullOrWhiteSpace(docent))
             {
                 try
                 {
@@ -96,45 +96,80 @@ namespace AiXeduleApiGrabber.Controllers
                         client.DefaultRequestHeaders.Add("Cookie",
                             $"User={SessionReviver.UserCookie}; ASP.NET_SessionId={SessionReviver.SessionCookie}");
 
-                        string response = await client.GetStringAsync($"{BaseUrl}/api/group");
-                        List<GroupEntry> groups = JsonConvert.DeserializeObject<List<GroupEntry>>(response);
+                        List<GroupEntry> groups = new List<GroupEntry>();
+                        List<DocentEntry> docents = new List<DocentEntry>();
+                        string response;
+                        ISubjectEntry subject = null;
 
-                        GroupEntry groupEntry = groups.FirstOrDefault(g => g.Code.ToLowerInvariant() == group.ToLowerInvariant());
-                        if (groupEntry == null)
+                        if (!string.IsNullOrWhiteSpace(group))
                         {
-                            return BadRequest();
-                        }
+                            response = await client.GetStringAsync($"{BaseUrl}/api/group");
+                            groups = JsonConvert.DeserializeObject<List<GroupEntry>>(response);
 
-                        if (cache.ContainsKey(groupEntry.Code))
-                        {
-                            if (DateTime.UtcNow < cache[groupEntry.Code].lastUpdated.AddHours(4))
+                            GroupEntry groupEntry = groups.FirstOrDefault(g => g.Code.ToLowerInvariant() == group.ToLowerInvariant());
+                            if (groupEntry == null)
                             {
-                                var serializer = new CalendarSerializer();
-                                string serializedString = serializer.SerializeToString(cache[groupEntry.Code].Calendar);
-                                return Ok(serializedString);
+                                return BadRequest();
                             }
+
+                            if (cache.ContainsKey(groupEntry.Id))
+                            {
+                                if (DateTime.UtcNow < cache[groupEntry.Id].lastUpdated.AddHours(4))
+                                {
+                                    var serializer = new CalendarSerializer();
+                                    string serializedString = serializer.SerializeToString(cache[groupEntry.Id].Calendar);
+                                    return Ok(serializedString);
+                                }
+                            }
+
+                            response = await client.GetStringAsync($"{BaseUrl}/api/docent");
+                            docents = JsonConvert.DeserializeObject<List<DocentEntry>>(response);
+
+                            subject = groupEntry;
+                        } else if (!string.IsNullOrWhiteSpace(docent))
+                        {
+                            response = await client.GetStringAsync($"{BaseUrl}/api/docent");
+                            docents = JsonConvert.DeserializeObject<List<DocentEntry>>(response);
+
+                            DocentEntry docentEntry = docents.FirstOrDefault(d => d.Code.ToLowerInvariant() == docent.ToLowerInvariant());
+                            if (docentEntry == null)
+                            {
+                                return BadRequest();
+                            }
+
+                            if (cache.ContainsKey(docentEntry.Id))
+                            {
+                                if (DateTime.UtcNow < cache[docentEntry.Id].lastUpdated.AddHours(4))
+                                {
+                                    var serializer = new CalendarSerializer();
+                                    string serializedString = serializer.SerializeToString(cache[docentEntry.Id].Calendar);
+                                    return Ok(serializedString);
+                                }
+                            }
+
+                            response = await client.GetStringAsync($"{BaseUrl}/api/group");
+                            groups = JsonConvert.DeserializeObject<List<GroupEntry>>(response);
+
+                            subject = docentEntry;
                         }
 
                         response = await client.GetStringAsync($"{BaseUrl}/api/year");
                         List<YearEntry> years = JsonConvert.DeserializeObject<List<YearEntry>>(response);
 
-                        response = await client.GetStringAsync($"{BaseUrl}/api/docent");
-                        List<DocentEntry> docents = JsonConvert.DeserializeObject<List<DocentEntry>>(response);
-
                         response = await client.GetStringAsync($"{BaseUrl}/api/facility");
                         List<FacilityEntry> facilities = JsonConvert.DeserializeObject<List<FacilityEntry>>(response);
 
                         YearEntry yearEntry =
-                            years.FirstOrDefault(y => y.Oru == groupEntry.Orus.First());
+                            years.FirstOrDefault(y => y.Oru == subject.Orus.First());
 
                         string[] scheduleIds = null;
                         if (weekNr <= 0 || weekNr > 52)
                         {
-                            scheduleIds = GenerateScheduleFormats(yearEntry, groupEntry.Id);
+                            scheduleIds = GenerateScheduleFormats(yearEntry, subject.Id);
                         }
                         else
                         {
-                            scheduleIds = GenerateScheduleFormats(yearEntry, groupEntry.Id, new[] { weekNr });
+                            scheduleIds = GenerateScheduleFormats(yearEntry, subject.Id, new[] { weekNr });
                         }
 
                         response = await client.GetStringAsync(
@@ -177,9 +212,9 @@ namespace AiXeduleApiGrabber.Controllers
                         }
 
                         icalCalendar.AddTimeZone("Europe/Amsterdam");
-                        cache[groupEntry.Code] = new CacheEntry()
+                        cache[subject.Id] = new CacheEntry()
                         {
-                            GroupName = groupEntry.Code,
+                            GroupName = subject.Id,
                             Calendar = icalCalendar,
                             lastUpdated = DateTime.UtcNow
                         };
