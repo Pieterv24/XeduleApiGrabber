@@ -2,10 +2,10 @@
 A program to grab schedules from the XeduleAPI and offer them on a API endpoint that produces an ICal file
 
 ### Requirements to build
-- .net core SDK 2.1+
+- .NET core SDK 2.1+
 
 ### Setup with .net core CLI
-`cd XeduleApiGrabber`
+`cd XeduleApiGrabber`  
 `dotnet restore`
 
 ### Setup with Visual Studio
